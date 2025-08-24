@@ -44,7 +44,6 @@ sbstatus:
 ovs:
 	docker exec -it ovn ovs-vsctl show
 
-# DANGER: wipes clustered DB state; only for clean re-cluster during testing
 clean-state:
 	@read -p "This will DELETE ./state/ovn and ./state/openvswitch. Type 'yes' to continue: " ans; \
 	if [[ $$ans == "yes" ]]; then \

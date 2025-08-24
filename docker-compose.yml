@@ -1,6 +1,5 @@
 
 version: "3.9"
-
 services:
   ovn:
     build:
@@ -16,7 +15,6 @@ services:
     privileged: true
     network_mode: host
     pid: host
-
     environment:
       NODE_NAME: ${NODE_NAME}
       ROLE: ${ROLE}
@@ -38,16 +36,13 @@ services:
       ENCAP_IP: ${MGMT_IP}
       NB_REMOTES: "tcp:4.0.0.7:6641,tcp:4.0.0.8:6641,tcp:4.0.0.9:6641"
       SB_REMOTES: "tcp:4.0.0.7:6642,tcp:4.0.0.8:6642,tcp:4.0.0.9:6642"
-
     volumes:
       - /lib/modules:/lib/modules:ro
       - ./state/openvswitch:/var/lib/openvswitch
       - ./state/ovn:/var/lib/ovn
       - ./scripts/entrypoint.sh:/entrypoint.sh:ro
       - ./scripts/checks.sh:/scripts/checks.sh:ro
-
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
-
     healthcheck:
       test: ["CMD-SHELL", "ovs-vsctl --timeout=2 show >/dev/null 2>&1 && ovn-appctl -t ovn-northd status >/dev/null 2>&1"]
       interval: 30s
