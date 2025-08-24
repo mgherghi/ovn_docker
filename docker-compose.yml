@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  ovn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OVS_VERSION:
+        OVN_VERSION:
+    image: ovn-allinone:trixie-slim
+    container_name: ovn
+    hostname: ${NODE_NAME}
+    restart: always
+    privileged: true
+    network_mode: host
+    pid: host
+
+    environment:
+      # --- Node role / cluster ---
+      NODE_NAME: ${NODE_NAME}
+      ROLE: ${ROLE}                    # bootstrap on r730xd-1, join on others
+      BOOTSTRAP_IP: ${BOOTSTRAP_IP}   # 4.0.0.7 on joiners
+
+      # --- OVS physical wiring ---
+      PHYS_BR: br-phys
+      PHYSNET_NAME: physnet
+      BOND_PORT: ${BOND_PORT}         # mlnx-bond
+      ALLOWED_VLANS: "10,20"
+
+      # --- VLAN 10/20 as OVS internal ports with IPs ---
+      MGMT_VLAN: "10"
+      MGMT_IFACE: ovs-mgmt
+      MGMT_CIDR: ${MGMT_CIDR}         # 4.0.0.X/24
+      MGMT_IP: ${MGMT_IP}             # same as above but without /mask
+      MGMT_GW: ${MGMT_GW}             # 4.0.0.1 (optional)
+      LINSTOR_VLAN: "20"
+      LINSTOR_IFACE: linstor-mgmt
+      LINSTOR_CIDR: ${LINSTOR_CIDR}   # 4.0.1.X/24
+      MTU: "9000"                     # adjust or unset if your fabric isn’t jumbo
+
+      # --- OVN encap + clustered remotes ---
+      ENCAP_TYPE: geneve
+      ENCAP_IP: ${MGMT_IP}
+      NB_REMOTES: "tcp:4.0.0.7:6641,tcp:4.0.0.8:6641,tcp:4.0.0.9:6641"
+      SB_REMOTES: "tcp:4.0.0.7:6642,tcp:4.0.0.8:6642,tcp:4.0.0.9:6642"
+
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - ./state/openvswitch:/var/lib/openvswitch
+      - ./state/ovn:/var/lib/ovn
+      - ./scripts/entrypoint.sh:/entrypoint.sh:ro
+
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+    healthcheck:
+      test: ["CMD-SHELL", "ovs-vsctl --timeout=2 show >/dev/null 2>&1 && ovn-appctl -t ovn-northd status >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
