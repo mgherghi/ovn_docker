@@ -14,7 +14,6 @@ fi
 HOST_SHORT="$(hostname -s || hostname)"
 CHOSEN_NODE="${NODE_NAME_ARG:-${NODE_NAME:-$HOST_SHORT}}"
 
-# normalize expected hostnames → env filenames
 case "$CHOSEN_NODE" in
   r730xd-1|node1) ENV_FILE="r730xd-1.env" ;;
   r730xd-2|node2) ENV_FILE="r730xd-2.env" ;;
