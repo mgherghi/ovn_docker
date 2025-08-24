@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -13,11 +14,13 @@ OVS_DB_DIR="/var/lib/openvswitch"
 OVN_DB_DIR="/var/lib/ovn"
 mkdir -p "$OVS_DB_DIR" "$OVN_DB_DIR" /var/log/openvswitch /var/log/ovn /var/run/openvswitch /var/run/ovn /etc/openvswitch
 
+# Clean stale PIDs/locks
 for d in /var/run/openvswitch /var/run/ovn; do
   find "$d" -maxdepth 1 -type f -name "*.pid" -delete || true
   find "$d" -maxdepth 1 -type f -name "*.lock" -delete || true
 done
 
+# Host module sanity
 if [[ ! -d /sys/module/openvswitch ]]; then
   log "ERROR: host openvswitch module not loaded. Run scripts/host-prep.sh"
   exit 1
@@ -26,6 +29,7 @@ if [[ ! -d /sys/module/geneve ]]; then
   log "WARN: host geneve module not loaded; encapsulation may fail."
 fi
 
+# Stable system-id BEFORE OVS starts
 SYS_ID_FILE_VAR="/var/lib/openvswitch/system-id.conf"
 SYS_ID_FILE_ETC="/etc/openvswitch/system-id.conf"
 if [[ -s "$SYS_ID_FILE_VAR" ]]; then
@@ -38,6 +42,7 @@ else
   echo "$SYSTEM_ID" > "$SYS_ID_FILE_ETC"
 fi
 
+# Start OVS
 if [[ ! -f /etc/openvswitch/conf.db ]]; then
   log "Initializing /etc/openvswitch/conf.db"
   ovsdb-tool create /etc/openvswitch/conf.db /usr/share/openvswitch/vswitch.ovsschema
@@ -47,14 +52,17 @@ OVS_CTL_OPTS="--system-id=$SYSTEM_ID"
 ovs-ctl $OVS_CTL_OPTS --no-mlockall start
 ovs-ctl status || (log "ovs-ctl failed to start" && exit 1)
 
+# OVS fabric
 log "Configuring ${PHYS_BR} with trunk ${BOND_PORT} (VLANs ${ALLOWED_VLANS})"
 ovs-vsctl --may-exist add-br "${PHYS_BR}" -- set Bridge "${PHYS_BR}" datapath_type=system fail-mode=standalone
 ovs-vsctl --may-exist add-port "${PHYS_BR}" "${BOND_PORT}"   -- set Port "${BOND_PORT}" vlan_mode=trunk trunks="[${ALLOWED_VLANS}]"
 
+# Internal access ports for VLAN 10/20 (tag on Port)
 ovs-vsctl --may-exist add-port "${PHYS_BR}" "${MGMT_IFACE}"   -- set Interface "${MGMT_IFACE}" type=internal   -- set Port "${MGMT_IFACE}" tag="${MGMT_VLAN:-10}"
 
 ovs-vsctl --may-exist add-port "${PHYS_BR}" "${LINSTOR_IFACE}"   -- set Interface "${LINSTOR_IFACE}" type=internal   -- set Port "${LINSTOR_IFACE}" tag="${LINSTOR_VLAN:-20}"
 
+# IPs/MTU
 ip link set "${MGMT_IFACE}" up
 ip addr flush dev "${MGMT_IFACE}" || true
 ip addr add "${MGMT_CIDR}" dev "${MGMT_IFACE}"
@@ -69,12 +77,14 @@ if [[ -n "${MGMT_GW:-}" ]]; then
   ip route replace "${MGMT_GW}/32" dev "${MGMT_IFACE}" || true
 fi
 
+# OVN external-ids
 ovs-vsctl set Open_vSwitch . external_ids:system-id="${SYSTEM_ID}"
 ovs-vsctl set Open_vSwitch . external_ids:ovn-bridge-mappings="${PHYSNET_NAME}:${PHYS_BR}"
 ovs-vsctl set Open_vSwitch . external_ids:ovn-encap-type="${ENCAP_TYPE}"
 ovs-vsctl set Open_vSwitch . external_ids:ovn-encap-ip="${ENCAP_IP}"
 ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="${SB_REMOTES}"
 
+# NB/SB RAFT clustered DBs (legacy 3-arg syntax)
 NB_DB="${OVN_DB_DIR}/ovnnb_db.db"
 SB_DB="${OVN_DB_DIR}/ovnsb_db.db"
 
@@ -99,10 +109,12 @@ else
   fi
 fi
 
+# Start NB/SB ovsdb-servers (binds)
 log "Starting NB/SB ovsdb-servers"
 ovn-ctl run_nb_ovsdb --db-nb-addr="${ENCAP_IP}"
 ovn-ctl run_sb_ovsdb --db-sb-addr="${ENCAP_IP}"
 
+# Wait for TCP listeners
 for i in {1..30}; do
   if ovsdb-client list-dbs "tcp:${ENCAP_IP}:6641" >/dev/null 2>&1 &&      ovsdb-client list-dbs "tcp:${ENCAP_IP}:6642" >/dev/null 2>&1; then
     break
