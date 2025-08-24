@@ -17,29 +17,22 @@ services:
     pid: host
 
     environment:
-      # --- Node role / cluster ---
       NODE_NAME: ${NODE_NAME}
-      ROLE: ${ROLE}                    # bootstrap on r730xd-1, join on others
-      BOOTSTRAP_IP: ${BOOTSTRAP_IP}   # 4.0.0.7 on joiners
-
-      # --- OVS physical wiring ---
+      ROLE: ${ROLE}
+      BOOTSTRAP_IP: ${BOOTSTRAP_IP}
       PHYS_BR: br-phys
       PHYSNET_NAME: physnet
-      BOND_PORT: ${BOND_PORT}         # mlnx-bond
+      BOND_PORT: ${BOND_PORT}
       ALLOWED_VLANS: "10,20"
-
-      # --- VLAN 10/20 as OVS internal ports with IPs ---
       MGMT_VLAN: "10"
       MGMT_IFACE: ovs-mgmt
-      MGMT_CIDR: ${MGMT_CIDR}         # 4.0.0.X/24
-      MGMT_IP: ${MGMT_IP}             # same as above but without /mask
-      MGMT_GW: ${MGMT_GW}             # 4.0.0.1 (optional)
+      MGMT_CIDR: ${MGMT_CIDR}
+      MGMT_IP: ${MGMT_IP}
+      MGMT_GW: ${MGMT_GW}
       LINSTOR_VLAN: "20"
       LINSTOR_IFACE: linstor-mgmt
-      LINSTOR_CIDR: ${LINSTOR_CIDR}   # 4.0.1.X/24
-      MTU: "9000"                     # adjust or unset if your fabric isn’t jumbo
-
-      # --- OVN encap + clustered remotes ---
+      LINSTOR_CIDR: ${LINSTOR_CIDR}
+      MTU: "9000"
       ENCAP_TYPE: geneve
       ENCAP_IP: ${MGMT_IP}
       NB_REMOTES: "tcp:4.0.0.7:6641,tcp:4.0.0.8:6641,tcp:4.0.0.9:6641"
